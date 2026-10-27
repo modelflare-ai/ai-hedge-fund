@@ -15,7 +15,7 @@ from hedge_fund.llm.registry import provider_for
 
 SIGNUP_URL = "http://modelflare.dev/sign-up?utm_source=github&utm_campaign=mf_ai-hedge-fund"
 KEYS_URL = "https://modelflare.dev/keys"
-DASHBOARD_URL = "https://modelflare.dev/dashboard"
+WALLET_URL = "https://modelflare.dev/wallet"
 DEFAULT_BASE_URL = "https://modelflare.dev/v1"
 
 _KEY = (
@@ -23,8 +23,8 @@ _KEY = (
     " / Your Modelflare API key is invalid or revoked. Get a key at https://modelflare.dev/keys"
 )
 _BALANCE = (
-    "Modelflare 余额不足，请充值：https://modelflare.dev/dashboard"
-    " / Insufficient Modelflare balance. Top up at https://modelflare.dev/dashboard"
+    f"Modelflare 余额不足，请充值：{WALLET_URL}"
+    f" / Insufficient Modelflare balance. Top up at {WALLET_URL}"
 )
 _BILLING = re.compile(r"quota|balance|insufficient|额度|余额", re.IGNORECASE)
 _ERROR_CODE = re.compile(r"Error code:\s*(\d{3})")
