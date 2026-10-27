@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: ai-hedge-fund
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: MODELFLARE_BASE_URL
+        value: https://modelflare.dev/v1
+      - key: MODELFLARE_API_KEY
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
+    disk:
+      name: hedge-fund
+      mountPath: /root/.hedge-fund
+      sizeGB: 1

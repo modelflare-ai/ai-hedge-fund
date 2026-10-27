@@ -57,7 +57,7 @@ MODE_LABELS: dict[PortfolioMode, str] = {"long_only": "Long-only", "long_short":
 # reads HEDGE_FUND_LLM_MODEL (hedge_fund/llm/client.py) and routes to the right provider, so
 # setting that env var steers every agent instance — the warm roster AND the
 # Fund — with no threading. Quant models (PEAD) carry no LLM and ignore it.
-DEFAULT_MODEL_LABEL = "Opus 5.5"
+DEFAULT_MODEL_LABEL = "GPT-6 Sol · Modelflare"
 
 DEFAULT_RISK = {"max_position_pct": 0.25, "max_gross_exposure": 1.0}
 DEFAULT_CAPITAL = 100_000.0

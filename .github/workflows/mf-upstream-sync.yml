@@ -1,0 +1,67 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.MF_SYNC_TOKEN || github.token }}
+
+      - name: Merge upstream
+        id: merge
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/virattt/ai-hedge-fund.git
+          git fetch upstream
+          default_ref=$(git ls-remote --symref upstream HEAD | awk '/^ref:/ {sub("refs/heads/","",$2); print $2}')
+          if [ -z "${default_ref}" ]; then
+            default_ref=main
+          fi
+          date_stamp=$(date -u +%Y-%m-%d)
+          branch="sync/upstream-${date_stamp}"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "upstream/${default_ref}" HEAD; then
+            echo "result=uptodate" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git checkout -B "${branch}"
+          if git merge --no-edit "upstream/${default_ref}"; then
+            echo "result=merged" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open pull request
+        if: steps.merge.outputs.result == 'merged'
+        env:
+          GH_TOKEN: ${{ secrets.MF_SYNC_TOKEN || github.token }}
+        run: |
+          git push -u origin "${{ steps.merge.outputs.branch }}"
+          gh pr create \
+            --title "Sync upstream ${{ steps.merge.outputs.branch }}" \
+            --body "Merge upstream https://github.com/virattt/ai-hedge-fund.git (merge, never rebase)."
+
+      - name: Open conflict issue
+        if: steps.merge.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.MF_SYNC_TOKEN || github.token }}
+        run: |
+          gh issue create \
+            --title "Upstream sync conflict ${{ steps.merge.outputs.branch }}" \
+            --body "Automatic merge of https://github.com/virattt/ai-hedge-fund.git failed and was aborted. The sync does not rebase. Resolve the conflicts manually."

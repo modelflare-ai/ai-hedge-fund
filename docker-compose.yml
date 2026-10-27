@@ -1,0 +1,11 @@
+services:
+  aihf:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      MODELFLARE_API_KEY: ${MODELFLARE_API_KEY:-}
+      MODELFLARE_BASE_URL: ${MODELFLARE_BASE_URL:-https://modelflare.dev/v1}
+      PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:8000}
+    volumes:
+      - ./data:/root/.hedge-fund

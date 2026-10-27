@@ -65,6 +65,8 @@ from hedge_fund.data import CachedDataClient, FDClient
 from hedge_fund.data.bars import is_intraday
 from hedge_fund.data.sessions import completed_through
 from hedge_fund.fund import Fund, load_spec, normalize_universe
+from hedge_fund.llm import DEFAULT_MODEL
+from hedge_fund.llm.modelflare_errors import KEYS_URL, SIGNUP_URL, is_modelflare_model
 from hedge_fund.paper import (
     deploy,
     is_running,
@@ -218,6 +220,7 @@ def _backtest(args, parser: argparse.ArgumentParser, console: Console) -> None:
         parser.error(str(exc))
     end = args.end or completed_through()
     start = args.start or (_date.fromisoformat(end) - timedelta(weeks=BACKTEST_WEEKS)).isoformat()
+    _require_modelflare_key(console)
     # A backtest blinds the investor agents' prompts (no ticker, industry or
     # calendar dates): the LLM may have been trained on what those companies
     # did over the window, and that memory would otherwise score as skill.
@@ -285,6 +288,7 @@ def _paper(args, parser: argparse.ArgumentParser, console: Console) -> None:
     directory = _fund_dir(args.name, parser)
 
     if args.action == "tick":
+        _require_modelflare_key(console)
         deployed = load_deployed(directory)
         with FDClient() as raw:
             fd = CachedDataClient(raw, live=deployed.spec.is_intraday)
@@ -299,6 +303,7 @@ def _paper(args, parser: argparse.ArgumentParser, console: Console) -> None:
         return
 
     if args.action == "run":
+        _require_modelflare_key(console)
         deployed = load_deployed(directory)
         spec = deployed.spec
         cadence = f"{spec.cadence_label}, {spec.window.label}" if spec.is_intraday else spec.rebalance
@@ -360,6 +365,22 @@ def _paper(args, parser: argparse.ArgumentParser, console: Console) -> None:
     elif args.action == "resume":
         ledger.resume()
         console.print(f"[green]{args.name} resumed[/]")
+
+
+def _require_modelflare_key(console: Console) -> None:
+    """Exit 2 before a Modelflare backtest or paper run when the key is missing.
+
+    Status, list, halt, resume, scorecard, stop, and help never call this.
+    """
+    model = os.environ.get("HEDGE_FUND_LLM_MODEL") or DEFAULT_MODEL
+    if not is_modelflare_model(model) or os.environ.get("MODELFLARE_API_KEY"):
+        return
+    console.print(
+        "[red]MODELFLARE_API_KEY is not set.[/]\n"
+        f"Sign up: {SIGNUP_URL}\n"
+        f"Keys: {KEYS_URL}"
+    )
+    raise SystemExit(2)
 
 
 def _status_line(directory: Path) -> str:

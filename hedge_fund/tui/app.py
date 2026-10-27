@@ -8,6 +8,7 @@ from textual.binding import Binding
 from hedge_fund import paths
 from hedge_fund.tui.home import HomeScreen
 from hedge_fund.tui.keys import apply_credentials
+from hedge_fund.tui.modelflare_onboarding import ModelflareOnboarding, should_prompt_modelflare
 from hedge_fund.tui.palette import ANSI_THEME
 from hedge_fund.tui.shared import VERSION
 
@@ -32,3 +33,5 @@ class HedgeFundApp(App):
         apply_credentials()
         paths.ensure_mandates_dir()
         self.push_screen(HomeScreen())
+        if should_prompt_modelflare():
+            self.push_screen(ModelflareOnboarding())

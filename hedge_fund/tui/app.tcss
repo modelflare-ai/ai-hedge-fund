@@ -493,3 +493,31 @@ RunConfirmScreen {
 #bt-done-menu {
     height: auto;
 }
+
+/* ---------------- modelflare onboarding ---------------- */
+
+ModelflareOnboarding {
+    align: center middle;
+}
+
+#mf-onboard {
+    width: 76;
+    max-width: 94%;
+    height: auto;
+    padding: 1 3;
+    background: #101613;
+    border: round #2bd97c;
+}
+
+#mf-title {
+    margin-bottom: 1;
+}
+
+#mf-blurb {
+    margin-bottom: 1;
+}
+
+#mf-status {
+    margin-top: 1;
+    color: #d9e6e0;
+}

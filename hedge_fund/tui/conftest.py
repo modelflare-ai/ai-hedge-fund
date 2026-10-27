@@ -29,5 +29,8 @@ def isolated_configuration(tmp_path, monkeypatch):
         # directly rather than through monkeypatch.
         monkeypatch.setenv(variable, "")
         monkeypatch.delenv(variable, raising=False)
+    # The product default is Modelflare, so a missing key pushes onboarding
+    # over Home. Existing screen tests are about those screens, not that gate.
+    monkeypatch.setenv("MODELFLARE_API_KEY", "test-key-not-real")
     monkeypatch.setattr(requests.sessions.Session, "request", Mock(side_effect=AssertionError("No live HTTP in TUI tests")))
     return saved

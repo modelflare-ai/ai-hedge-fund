@@ -18,6 +18,7 @@ API_MODELS_PATH = Path(__file__).resolve().parent / "api_models.json"
 
 # Provider names are the strings used in api_models.json.
 PROVIDER_ENV_VARS = {
+    "Modelflare": "MODELFLARE_API_KEY",
     "Anthropic": "ANTHROPIC_API_KEY",
     "OpenAI": "OPENAI_API_KEY",
     "xAI": "XAI_API_KEY",
@@ -32,7 +33,7 @@ PROVIDER_ENV_VARS = {
 # a greyed row than a run that dies on an id the transport rejects.
 SUPPORTED_PROVIDERS = frozenset(PROVIDER_ENV_VARS)
 
-_FALLBACK = ("Opus 5.5", "claude-opus-5-5", "Anthropic")
+_FALLBACK = ("GPT-6 Sol · Modelflare", "modelflare/gpt-6-sol", "Modelflare")
 
 
 def load_api_models() -> list[tuple[str, str, str]]:

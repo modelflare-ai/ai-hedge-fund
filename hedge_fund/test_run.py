@@ -34,6 +34,7 @@ def offline(tmp_path, monkeypatch):
         return Fund(spec, models={s.name: [FakeAnalyst(m.name, {"AAPL": .8, "MSFT": -.6}) for m in s.models]
                                   for s in spec.strategies})
 
+    monkeypatch.setenv("MODELFLARE_API_KEY", "test-key-not-real")
     monkeypatch.setattr(run, "apply_credentials", lambda: None)
     monkeypatch.setattr(run, "ensure_mandates_dir", lambda: tmp_path)
     monkeypatch.setattr(run, "Fund", build_fund)

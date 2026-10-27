@@ -26,6 +26,7 @@ from typing import Protocol, runtime_checkable
 import requests
 
 from hedge_fund.llm import contract
+from hedge_fund.llm.modelflare_errors import friendly_llm_error, wire_model
 from hedge_fund.llm.registry import (
     env_var_for,
     is_supported,
@@ -33,7 +34,7 @@ from hedge_fund.llm.registry import (
     SUPPORTED_PROVIDERS,
 )
 
-DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_MODEL = "modelflare/gpt-6-sol"
 
 # Called with each piece of text as it arrives. None means don't stream.
 TokenListener = Callable[[str], None] | None
@@ -81,26 +82,36 @@ class ChatLLM:
     the prompt cache, and the parse are untouched by it.
     """
 
-    def __init__(self, model: str, chat, on_token: TokenListener = None) -> None:
+    def __init__(self, model: str, chat, on_token: TokenListener = None, provider: str | None = None) -> None:
         self.model = model
+        self.provider = provider
         self._chat = chat
         self._on_token = on_token
 
     def complete(self, system: str, user: str) -> str:
         messages = [("system", system), ("human", user)]
-        if self._on_token is None:
-            return _flatten(self._chat.invoke(messages).content)
+        try:
+            if self._on_token is None:
+                return _flatten(self._chat.invoke(messages).content)
 
-        # Streaming chunks concatenate into the response, so they flatten
-        # without a separator — the "\n" that joins whole-message blocks would
-        # land mid-word here.
-        parts: list[str] = []
-        for chunk in self._chat.stream(messages):
-            text = _flatten(chunk.content, sep="")
-            if text:
-                parts.append(text)
-                self._on_token(text)
-        return "".join(parts)
+            # Streaming chunks concatenate into the response, so they flatten
+            # without a separator — the "\n" that joins whole-message blocks would
+            # land mid-word here.
+            parts: list[str] = []
+            for chunk in self._chat.stream(messages):
+                text = _flatten(chunk.content, sep="")
+                if text:
+                    parts.append(text)
+                    self._on_token(text)
+            return "".join(parts)
+        except Exception as exc:
+            # Modelflare auth, billing, and group errors become a bilingual
+            # LLMCallError. Anything else — including other providers — is
+            # re-raised unchanged.
+            friendly = friendly_llm_error(exc, model=self.model, provider=self.provider)
+            if friendly:
+                raise LLMCallError(friendly) from exc
+            raise
 
 
 class JevLLM:
@@ -238,8 +249,9 @@ def make_llm(
     provider = provider_for(model)
     if provider is None:
         # Unlisted ids still work: a model newer than the registry should not
-        # need a code change. Anthropic is the default transport.
-        provider = "Anthropic"
+        # need a code change. A modelflare/ id stays on Modelflare so it cannot
+        # collide with OpenAI; anything else keeps the Anthropic transport.
+        provider = "Modelflare" if model.startswith("modelflare/") else "Anthropic"
     if not is_supported(provider):
         raise ValueError(
             f"No v2 client for {provider} (model {model}). "
@@ -260,6 +272,18 @@ def make_llm(
         from langchain_openai import ChatOpenAI
         chat = ChatOpenAI(model=model, api_key=api_key, timeout=timeout,
                           max_retries=1, base_url=os.getenv("OPENAI_API_BASE"))
+    elif provider == "Modelflare":
+        # Same OpenAI wire format as Kimi. The registry prefix keeps
+        # provider_for() from handing gpt-6-sol to OpenAI; the API sees the
+        # bare id. MODELFLARE_BASE_URL overrides the public endpoint.
+        from langchain_openai import ChatOpenAI
+        chat = ChatOpenAI(
+            model=wire_model(model),
+            base_url=os.getenv("MODELFLARE_BASE_URL") or "https://modelflare.dev/v1",
+            api_key=api_key,
+            timeout=timeout,
+            max_retries=1,
+        )
     elif provider == "DeepSeek":
         from langchain_deepseek import ChatDeepSeek
         chat = ChatDeepSeek(model=model, api_key=api_key, timeout=timeout,
@@ -283,7 +307,7 @@ def make_llm(
     else:  # pragma: no cover - SUPPORTED_PROVIDERS is checked above
         raise ValueError(f"Unhandled provider {provider}")
 
-    return ChatLLM(model, chat, on_token)
+    return ChatLLM(model, chat, on_token, provider)
 
 
 def AnthropicLLM(model: str | None = None, **kwargs) -> LLMClient:  # noqa: N802
