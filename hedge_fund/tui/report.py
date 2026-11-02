@@ -20,7 +20,7 @@ from hedge_fund.llm import ThesisStream
 from hedge_fund.models import Signal
 from hedge_fund.pipeline import CycleRecord, DecisionRecord, SessionRecord
 from hedge_fund.tui.palette import BRIGHT, CYAN, GREEN, MUTED, RED, TEXT
-from hedge_fund.tui.shared import DISPLAY_NAMES, SHORT_NAMES
+from hedge_fund.tui.shared import DISPLAY_NAMES, horizon_label, SHORT_NAMES
 
 # One glyph and one colour per call, in one place: the live board knows only
 # the word the stream has decoded, the report has a whole Signal, and they must
@@ -292,6 +292,8 @@ def signal_detail(record: CycleRecord | DecisionRecord, si: int, sj: int) -> Gro
     header.append("  ·  ", style=MUTED)
     header.append(DISPLAY_NAMES.get(signal.model_name, signal.model_name),
                   style=f"bold {BRIGHT}")
+    if signal.horizon_days is not None:
+        header.append(f"  ·  {horizon_label(signal.horizon_days)} view", style=MUTED)
     facts = Text()
     facts.append(word, style=f"bold {tone}")
     if confidence is not None:
@@ -387,7 +389,7 @@ def session_row(record: SessionRecord, prev_nav: float, *, time_only: bool = Fal
         n = len(record.executed.fills)
         row.append(f"  {n} {'fill' if n == 1 else 'fills'}", style=MUTED)
     if record.decision is not None:
-        row.append("  decided", style=MUTED)
+        row.append("  stopped out" if record.decision.is_stopped_out else "  decided", style=MUTED)
     return row
 
 
@@ -415,7 +417,16 @@ def session_overview(record: SessionRecord) -> Group:
         if len(x.fills) > 8:
             parts.append(Text(f"  … {len(x.fills) - 8} more", style=MUTED))
         parts.append(Text(""))
-    if record.decision is not None:
+    if record.decision is not None and record.decision.is_stopped_out:
+        d = record.decision
+        stop = next(c for c in d.clamps if c.limit == "max_drawdown_pct")
+        parts.append(Text.assemble(
+            ("STOPPED OUT  ", f"bold {RED}"),
+            (f"drawdown {stop.before:.1%} breached the {d.spec.risk.max_drawdown_pct:.1%} limit · "
+             f"sells everything at the next {'bar' if is_intraday(record.session) else 'session'}'s close",
+             MUTED)))
+        parts.append(Text(""))
+    elif record.decision is not None:
         d = record.decision
         n_signals = sum(len(sr.signals) for sr in d.strategies)
         parts.append(Text.assemble(
@@ -610,17 +621,25 @@ def _orders_detail(record: CycleRecord) -> Group:
     table.add_column("Ticker", style=f"bold {CYAN}")
     table.add_column("Mark", justify="right")
     table.add_column("Fill", justify="right")
+    sized = any(o.adv is not None for o in record.orders)
+    if sized:
+        table.add_column("% ADV", justify="right")
     for o, fill in zip(record.orders, record.fills):
         tone = f"bold {GREEN}" if o.side == "buy" else f"bold {RED}"
-        table.add_row(
+        row = [
             Text(o.side.upper(), style=tone),
             Text(f"{o.quantity:,}", style=tone),
             o.ticker,
             f"${o.price:,.2f}",
             f"${fill.price:,.2f}",
-        )
+        ]
+        if sized:
+            row.append(f"{o.participation:.2%}" if o.adv is not None else "")
+        table.add_row(*row)
     if record.slippage or record.commission:
-        table.caption = f"slippage ${record.slippage:,.2f} · commission ${record.commission:,.2f}"
+        # Rounding first keeps a float's -0.00 off the screen.
+        spread, impact, commission = (round(x, 2) + 0.0 for x in (record.spread_cost, record.impact, record.commission))
+        table.caption = f"spread ${spread:,.2f} · impact ${impact:,.2f} · commission ${commission:,.2f}"
         table.caption_style = MUTED
         table.caption_justify = "left"
     return Group(Text("ORDERS", style=f"bold {BRIGHT}"), Text(""), table)
